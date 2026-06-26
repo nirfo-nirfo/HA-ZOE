@@ -1,0 +1,23 @@
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    anthropic_api_key: str
+
+    ha_base_url: str
+    ha_long_lived_token: str
+
+    whatsapp_phone_number_id: str
+    whatsapp_access_token: str
+    whatsapp_verify_token: str
+    whatsapp_app_secret: str
+
+    allowed_sender_number: str
+
+    entities_config_path: str = "config/entities.yaml"
+    confirmation_ttl_seconds: int = 120
+
+
+settings = Settings()

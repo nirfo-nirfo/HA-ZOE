@@ -1,0 +1,40 @@
+# Entity catalog for ZOE. Add a device here and it becomes controllable —
+# no code changes needed. `risky: true` means ZOE will ask for an explicit
+# "yes"/"confirm" reply before calling the service.
+
+entities:
+  - entity_id: cover.living_room_shutter
+    name: "Living room shutter"
+    domain: cover
+    services: [open_cover, close_cover, stop_cover]
+    risky: false
+
+  - entity_id: light.living_room_shutter_light
+    name: "Living room shutter light"
+    domain: light
+    services: [turn_on, turn_off]
+    risky: false
+
+  - entity_id: cover.bedroom_shutter
+    name: "Bedroom shutter"
+    domain: cover
+    services: [open_cover, close_cover, stop_cover]
+    risky: false
+
+  - entity_id: light.bedroom_shutter_light
+    name: "Bedroom shutter light"
+    domain: light
+    services: [turn_on, turn_off]
+    risky: false
+
+  - entity_id: switch.boiler
+    name: "Boiler"
+    domain: switch
+    services: [turn_on, turn_off]
+    risky: false
+
+  - entity_id: lock.front_door
+    name: "Front door lock"
+    domain: lock
+    services: [lock, unlock]
+    risky: true
