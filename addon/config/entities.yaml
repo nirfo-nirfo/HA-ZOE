@@ -3,38 +3,38 @@
 # "yes"/"confirm" reply before calling the service.
 
 entities:
-  - entity_id: cover.living_room_shutter
-    name: "Living room shutter"
+  - entity_id: cover.tris_shahen
+    name: "תריס שכן (סלון)"
     domain: cover
     services: [open_cover, close_cover, stop_cover]
     risky: false
 
-  - entity_id: light.living_room_shutter_light
-    name: "Living room shutter light"
+  - entity_id: light.light_shahen
+    name: "אור תריס שכן (סלון)"
     domain: light
     services: [turn_on, turn_off]
     risky: false
 
-  - entity_id: cover.bedroom_shutter
-    name: "Bedroom shutter"
+  - entity_id: cover.tris_street
+    name: "תריס רחוב (סלון)"
     domain: cover
     services: [open_cover, close_cover, stop_cover]
     risky: false
 
-  - entity_id: light.bedroom_shutter_light
-    name: "Bedroom shutter light"
+  - entity_id: light.light_street
+    name: "אור תריס רחוב (סלון)"
     domain: light
     services: [turn_on, turn_off]
     risky: false
 
-  - entity_id: switch.boiler
-    name: "Boiler"
+  - entity_id: switch.dvd_boiler
+    name: "דוד מים"
     domain: switch
     services: [turn_on, turn_off]
     risky: false
 
-  - entity_id: lock.front_door
-    name: "Front door lock"
+  - entity_id: lock.aqara_smart_lock_u200
+    name: "מנעול דלת כניסה"
     domain: lock
     services: [lock, unlock]
     risky: true
