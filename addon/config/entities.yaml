@@ -6,7 +6,7 @@ entities:
   - entity_id: cover.tris_shahen
     name: "תריס שכן (סלון)"
     domain: cover
-    services: [open_cover, close_cover, stop_cover]
+    services: [open_cover, close_cover, stop_cover, set_cover_position]
     risky: false
 
   - entity_id: light.light_shahen
@@ -18,7 +18,7 @@ entities:
   - entity_id: cover.tris_street
     name: "תריס רחוב (סלון)"
     domain: cover
-    services: [open_cover, close_cover, stop_cover]
+    services: [open_cover, close_cover, stop_cover, set_cover_position]
     risky: false
 
   - entity_id: light.light_street

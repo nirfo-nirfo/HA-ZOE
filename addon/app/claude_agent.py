@@ -17,7 +17,9 @@ SYSTEM_PROMPT = (
     "exact entity_id, domain, and service from the device list. "
     "Only act on devices in the list — never invent an entity_id. "
     "If the request is ambiguous or doesn't match a known device, do not call the tool; "
-    "instead reply with plain text asking for clarification."
+    "instead reply with plain text asking for clarification. "
+    "For a cover entity, to set a specific open percentage use service=set_cover_position "
+    "with service_data={\"position\": <0-100>}, where 0 is fully closed and 100 is fully open."
 )
 
 
