@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI, Request, Response
 
 from app.claude_agent import decide_actions, get_known_entities
@@ -52,6 +54,16 @@ async def _execute_control_action(entity_id: str, domain: str, service: str, ser
     return f"Failed: {description} — {detail}"
 
 
+async def _auto_turn_off_later(sender: str, entity_id: str, domain: str, name: str, minutes: float) -> None:
+    await asyncio.sleep(minutes * 60)
+    logger.info("Auto turn-off firing for %s after %s minutes", entity_id, minutes)
+    success, detail = await ha_client.call_service(domain, "turn_off", entity_id, {})
+    if success:
+        await send_message(sender, f"{name}: turned off automatically after {minutes:g} min ✅")
+    else:
+        await send_message(sender, f"{name}: failed to auto turn-off — {detail}")
+
+
 async def _handle_message(sender: str, text: str) -> None:
     confirmed = pop_if_confirmed(sender, text)
     if confirmed is not None:
@@ -93,14 +105,20 @@ async def _handle_message(sender: str, text: str) -> None:
         domain = call["input"]["domain"]
         service = call["input"]["service"]
         service_data = call["input"].get("service_data") or {}
+        duration_minutes = call["input"].get("duration_minutes")
         description = f"{entity_def['name']}: {service}"
 
         if entity_def.get("risky"):
             pending_actions.append(make_pending(entity_id, domain, service, service_data, description))
-        else:
-            immediate_replies.append(
-                await _execute_control_action(entity_id, domain, service, service_data, description)
+            continue
+
+        reply = await _execute_control_action(entity_id, domain, service, service_data, description)
+        if duration_minutes and service == "turn_on" and reply.startswith(entity_def["name"]):
+            asyncio.create_task(
+                _auto_turn_off_later(sender, entity_id, domain, entity_def["name"], duration_minutes)
             )
+            reply += f" (will turn off in {duration_minutes:g} min)"
+        immediate_replies.append(reply)
 
     if pending_actions:
         store_pending(sender, pending_actions)

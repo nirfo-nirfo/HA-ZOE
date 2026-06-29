@@ -25,6 +25,10 @@ SYSTEM_PROMPT = (
     "Only act on devices in the list — never invent an entity_id. "
     "For a cover entity, to set a specific open percentage use service=set_cover_position "
     "with service_data={\"position\": <0-100>}, where 0 is fully closed and 100 is fully open. "
+    "If the user asks to turn something on for a specific duration (e.g. \"turn on the "
+    "boiler for an hour\"), call control_device with service=turn_on and also set "
+    "duration_minutes to that many minutes — ZOE will turn it back off automatically when "
+    "the time is up. Only set duration_minutes together with turn_on. "
     "For anything that is not about a known device — general questions, writing or "
     "drafting text, current events, weather, or any other normal personal-assistant "
     "request — do not call any tool. Just answer directly and naturally in plain text, "
@@ -61,6 +65,11 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "service_data": {
                         "type": "object",
                         "description": "Optional extra service parameters (e.g. position).",
+                    },
+                    "duration_minutes": {
+                        "type": "number",
+                        "description": "If set with service=turn_on, automatically turn the "
+                        "device back off after this many minutes.",
                     },
                 },
                 "required": ["entity_id", "domain", "service"],
