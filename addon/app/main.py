@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Response
 
-from app.claude_agent import decide_action, get_known_entities
+from app.claude_agent import decide_actions, get_known_entities
 from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
@@ -44,51 +44,69 @@ async def receive_webhook(request: Request) -> Response:
     return Response(status_code=200)
 
 
+async def _execute_control_action(entity_id: str, domain: str, service: str, service_data: dict, description: str) -> str:
+    logger.info("Executing: %s", description)
+    success, detail = await ha_client.call_service(domain, service, entity_id, service_data)
+    if success:
+        return f"{description} ✅"
+    return f"Failed: {description} — {detail}"
+
+
 async def _handle_message(sender: str, text: str) -> None:
     confirmed = pop_if_confirmed(sender, text)
     if confirmed is not None:
-        logger.info("Confirmed risky action: %s", confirmed.description)
-        success, detail = await ha_client.call_service(
-            confirmed.domain, confirmed.service, confirmed.entity_id, confirmed.service_data
-        )
-        if success:
-            await send_message(sender, f"{confirmed.description} ✅")
-        else:
-            await send_message(sender, f"Failed: {confirmed.description} — {detail}")
+        replies = []
+        for action in confirmed:
+            logger.info("Confirmed risky action: %s", action.description)
+            replies.append(
+                await _execute_control_action(
+                    action.entity_id, action.domain, action.service, action.service_data, action.description
+                )
+            )
+        await send_message(sender, "\n".join(replies))
         return
 
     known_entities = get_known_entities()
     states = await ha_client.get_states(list(known_entities.keys()))
 
-    action = decide_action(text, states)
-    if action is None:
+    tool_calls = decide_actions(text, states)
+    if not tool_calls:
         await send_message(sender, "I'm not sure what you mean — could you rephrase?")
         return
 
-    entity_id = action["entity_id"]
-    entity_def = known_entities.get(entity_id)
-    if entity_def is None:
-        logger.error("Claude returned unknown entity_id: %s", entity_id)
-        await send_message(sender, "I tried to act on a device I don't recognize. Ignored for safety.")
-        return
+    immediate_replies: list[str] = []
+    pending_actions = []
 
-    domain = action["domain"]
-    service = action["service"]
-    service_data = action.get("service_data") or {}
-    description = f"{entity_def['name']}: {service}"
+    for call in tool_calls:
+        entity_id = call["input"].get("entity_id")
+        entity_def = known_entities.get(entity_id)
+        if entity_def is None:
+            logger.error("Claude returned unknown entity_id: %s", entity_id)
+            immediate_replies.append("I tried to act on a device I don't recognize. Ignored for safety.")
+            continue
 
-    if entity_def.get("risky"):
-        pending = make_pending(entity_id, domain, service, service_data, description)
-        store_pending(sender, pending)
-        logger.info("Risky action pending confirmation: %s", description)
-        await send_message(
-            sender, f"This will: {description}. Reply 'yes' to confirm."
-        )
-        return
+        if call["tool"] == "get_device_status":
+            state = states.get(entity_id, {}).get("state", "unknown")
+            immediate_replies.append(f"{entity_def['name']}: {state}")
+            continue
 
-    logger.info("Executing: %s", description)
-    success, detail = await ha_client.call_service(domain, service, entity_id, service_data)
-    if success:
-        await send_message(sender, f"{description} ✅")
-    else:
-        await send_message(sender, f"Failed: {description} — {detail}")
+        domain = call["input"]["domain"]
+        service = call["input"]["service"]
+        service_data = call["input"].get("service_data") or {}
+        description = f"{entity_def['name']}: {service}"
+
+        if entity_def.get("risky"):
+            pending_actions.append(make_pending(entity_id, domain, service, service_data, description))
+        else:
+            immediate_replies.append(
+                await _execute_control_action(entity_id, domain, service, service_data, description)
+            )
+
+    if pending_actions:
+        store_pending(sender, pending_actions)
+        descriptions = ", ".join(a.description for a in pending_actions)
+        logger.info("Risky actions pending confirmation: %s", descriptions)
+        immediate_replies.append(f"This will: {descriptions}. Reply 'yes' to confirm.")
+
+    if immediate_replies:
+        await send_message(sender, "\n".join(immediate_replies))

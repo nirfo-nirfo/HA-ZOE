@@ -16,20 +16,20 @@ class PendingAction:
 
 CONFIRM_WORDS = {"yes", "confirm", "כן", "אישור"}
 
-_pending: dict[str, PendingAction] = {}
+_pending: dict[str, list[PendingAction]] = {}
 
 
-def store_pending(sender: str, action: PendingAction) -> None:
-    _pending[sender] = action
+def store_pending(sender: str, actions: list[PendingAction]) -> None:
+    _pending[sender] = actions
 
 
-def pop_if_confirmed(sender: str, message_text: str) -> PendingAction | None:
-    """Returns the pending action if message_text confirms it and it hasn't expired."""
-    action = _pending.get(sender)
-    if action is None:
+def pop_if_confirmed(sender: str, message_text: str) -> list[PendingAction] | None:
+    """Returns the pending actions if message_text confirms them and they haven't expired."""
+    actions = _pending.get(sender)
+    if not actions:
         return None
 
-    if time.time() > action.expires_at:
+    if time.time() > actions[0].expires_at:
         del _pending[sender]
         return None
 
@@ -37,7 +37,7 @@ def pop_if_confirmed(sender: str, message_text: str) -> PendingAction | None:
         return None
 
     del _pending[sender]
-    return action
+    return actions
 
 
 def make_pending(
