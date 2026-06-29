@@ -38,3 +38,27 @@ entities:
     domain: lock
     services: [lock, unlock]
     risky: true
+
+  - entity_id: automation.morning_auto
+    name: "בוקר"
+    domain: automation
+    services: [trigger, turn_on, turn_off]
+    risky: false
+
+  - entity_id: automation.one_click_leaving_house
+    name: "יוצאים מהבית"
+    domain: automation
+    services: [trigger, turn_on, turn_off]
+    risky: false
+
+  - entity_id: automation.long_press_opening_house
+    name: "פתיחת בית"
+    domain: automation
+    services: [trigger, turn_on, turn_off]
+    risky: true
+
+  - entity_id: automation.two_clicks_night_lock
+    name: "לילה"
+    domain: automation
+    services: [trigger, turn_on, turn_off]
+    risky: false
