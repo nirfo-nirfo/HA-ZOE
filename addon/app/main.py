@@ -69,9 +69,9 @@ async def _handle_message(sender: str, text: str) -> None:
     known_entities = get_known_entities()
     states = await ha_client.get_states(list(known_entities.keys()))
 
-    tool_calls = decide_actions(text, states)
+    tool_calls, assistant_text = decide_actions(text, states)
     if not tool_calls:
-        await send_message(sender, "I'm not sure what you mean — could you rephrase?")
+        await send_message(sender, assistant_text or "I'm not sure what you mean — could you rephrase?")
         return
 
     immediate_replies: list[str] = []
