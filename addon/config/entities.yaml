@@ -43,7 +43,7 @@ entities:
     name: "בוקר"
     domain: automation
     services: [trigger, turn_on, turn_off]
-    risky: false
+    risky: true
 
   - entity_id: automation.one_click_leaving_house
     name: "יוצאים מהבית"
