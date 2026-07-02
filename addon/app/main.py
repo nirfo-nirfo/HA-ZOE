@@ -10,7 +10,7 @@ from app.claude_agent import REMINDER_TOOLS, decide_actions, get_known_entities
 from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
-from app.reminders import add_reminder, delete_reminder, list_reminders, pop_due
+from app.reminders import add_reminder, delete_all_reminders, delete_reminder, list_reminders, pop_due
 from app.settings import settings
 from app.whatsapp import extract_text_message, send_message, verify_signature
 
@@ -111,6 +111,10 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
         if delete_reminder(rid, sender):
             return f"Reminder {rid} deleted ✅"
         return f"Reminder {rid} not found."
+
+    if tool == "delete_all_reminders":
+        count = delete_all_reminders(sender)
+        return f"All {count} reminder(s) deleted ✅" if count else "No reminders to delete."
 
     return ""
 

@@ -58,6 +58,15 @@ def delete_reminder(reminder_id: str, sender: str) -> bool:
     return True
 
 
+def delete_all_reminders(sender: str) -> int:
+    reminders = _load()
+    remaining = [r for r in reminders if r.sender != sender]
+    deleted = len(reminders) - len(remaining)
+    if deleted:
+        _save(remaining)
+    return deleted
+
+
 def pop_due() -> list[Reminder]:
     now = time.time()
     reminders = _load()

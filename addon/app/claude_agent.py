@@ -17,8 +17,9 @@ _STATUS_TOOL = "get_device_status"
 _SET_REMINDER = "set_reminder"
 _LIST_REMINDERS = "list_reminders"
 _DELETE_REMINDER = "delete_reminder"
+_DELETE_ALL_REMINDERS = "delete_all_reminders"
 
-REMINDER_TOOLS = {_SET_REMINDER, _LIST_REMINDERS, _DELETE_REMINDER}
+REMINDER_TOOLS = {_SET_REMINDER, _LIST_REMINDERS, _DELETE_REMINDER, _DELETE_ALL_REMINDERS}
 
 SYSTEM_PROMPT = (
     "You are ZOE, a personal assistant reachable over WhatsApp that also controls "
@@ -49,7 +50,8 @@ SYSTEM_PROMPT = (
     "datetime provided in the context to resolve relative times like 'tomorrow', 'in 2 hours', "
     "'next Sunday'. All times are in Israel time (Asia/Jerusalem). "
     "When the user asks to see their reminders, call list_reminders. "
-    "When the user asks to delete or cancel a reminder, call delete_reminder with the reminder id. "
+    "When the user asks to delete or cancel a specific reminder, call delete_reminder with the reminder id. "
+    "When the user asks to delete or cancel ALL reminders, call delete_all_reminders. "
     "For anything that is not about a known device or reminder — general questions, writing or "
     "drafting text, current events, weather, or any other normal personal-assistant "
     "request — do not call any tool. Just answer directly and naturally in plain text, "
@@ -137,6 +139,11 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 },
                 "required": ["id"],
             },
+        },
+        {
+            "name": _DELETE_ALL_REMINDERS,
+            "description": "Deletes ALL pending reminders for the user at once.",
+            "input_schema": {"type": "object", "properties": {}},
         },
         {"type": "web_search_20250305", "name": "web_search", "max_uses": 3},
     ]
