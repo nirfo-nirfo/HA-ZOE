@@ -1,15 +1,30 @@
 import asyncio
+from datetime import datetime
 
 from fastapi import FastAPI, Request, Response
 
-from app.claude_agent import decide_actions, get_known_entities
+from app.claude_agent import REMINDER_TOOLS, decide_actions, get_known_entities
 from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
+from app.reminders import add_reminder, delete_reminder, list_reminders, pop_due
 from app.settings import settings
 from app.whatsapp import extract_text_message, send_message, verify_signature
 
 app = FastAPI(title="ZOE")
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    asyncio.create_task(_reminder_loop())
+
+
+async def _reminder_loop() -> None:
+    while True:
+        await asyncio.sleep(60)
+        for reminder in pop_due():
+            logger.info("Firing reminder %s for %s", reminder.id, reminder.sender)
+            await send_message(reminder.sender, f"⏰ {reminder.text}")
 
 
 @app.get("/webhook")
@@ -65,6 +80,35 @@ async def _auto_turn_off_later(sender: str, entity_id: str, domain: str, name: s
         await send_message(sender, f"{name}: failed to auto turn-off — {detail}")
 
 
+def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
+    if tool == "set_reminder":
+        try:
+            send_at = datetime.fromisoformat(inp["send_at"]).timestamp()
+        except (ValueError, KeyError):
+            return "I couldn't parse that date/time — please try again."
+        reminder = add_reminder(sender, inp["text"], send_at)
+        when = datetime.fromtimestamp(reminder.send_at).strftime("%d/%m/%Y %H:%M")
+        return f"Reminder set ✅ — I'll message you on {when}: {reminder.text}"
+
+    if tool == "list_reminders":
+        pending = list_reminders(sender)
+        if not pending:
+            return "You have no pending reminders."
+        lines = [
+            f"• [{r.id}] {datetime.fromtimestamp(r.send_at).strftime('%d/%m %H:%M')} — {r.text}"
+            for r in pending
+        ]
+        return "Your reminders:\n" + "\n".join(lines)
+
+    if tool == "delete_reminder":
+        rid = inp.get("id", "")
+        if delete_reminder(rid, sender):
+            return f"Reminder {rid} deleted ✅"
+        return f"Reminder {rid} not found."
+
+    return ""
+
+
 async def _handle_message(sender: str, text: str) -> None:
     confirmed = pop_if_confirmed(sender, text)
     if confirmed is not None:
@@ -91,22 +135,29 @@ async def _handle_message(sender: str, text: str) -> None:
     pending_actions = []
 
     for call in tool_calls:
-        entity_id = call["input"].get("entity_id")
+        tool = call["tool"]
+        inp = call["input"]
+
+        if tool in REMINDER_TOOLS:
+            immediate_replies.append(_handle_reminder_call(sender, tool, inp))
+            continue
+
+        entity_id = inp.get("entity_id")
         entity_def = known_entities.get(entity_id)
         if entity_def is None:
             logger.error("Claude returned unknown entity_id: %s", entity_id)
             immediate_replies.append("I tried to act on a device I don't recognize. Ignored for safety.")
             continue
 
-        if call["tool"] == "get_device_status":
+        if tool == "get_device_status":
             state = states.get(entity_id, {}).get("state", "unknown")
             immediate_replies.append(f"{entity_def['name']}: {state}")
             continue
 
-        domain = call["input"]["domain"]
-        service = call["input"]["service"]
-        service_data = call["input"].get("service_data") or {}
-        duration_minutes = call["input"].get("duration_minutes")
+        domain = inp["domain"]
+        service = inp["service"]
+        service_data = inp.get("service_data") or {}
+        duration_minutes = inp.get("duration_minutes")
         description = f"{entity_def['name']}: {service}"
 
         if entity_def.get("risky"):
