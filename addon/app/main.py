@@ -62,17 +62,21 @@ async def receive_webhook(request: Request) -> Response:
         logger.warning("Rejected message from unauthorized sender %s", sender)
         return Response(status_code=200)
 
+    asyncio.create_task(_process_message(sender, text, audio_id))
+    return Response(status_code=200)
+
+
+async def _process_message(sender: str, text: str | None, audio_id: str | None) -> None:
     if audio_id:
         logger.info("Inbound voice from %s, transcribing...", sender)
         text = await transcribe_audio(audio_id)
         if not text:
             await send_message(sender, "Sorry, I couldn't understand the voice message.")
-            return Response(status_code=200)
+            return
         logger.info("Transcribed voice from %s: %s", sender, text)
 
     logger.info("Inbound from %s: %s", sender, text)
     await _handle_message(sender, text)
-    return Response(status_code=200)
 
 
 async def _execute_control_action(entity_id: str, domain: str, service: str, service_data: dict, description: str) -> str:
