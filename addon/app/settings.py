@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     whatsapp_verify_token: str
     whatsapp_app_secret: str
 
-    allowed_sender_number: str
+    allowed_sender_numbers: str  # comma-separated E.164 numbers without leading +
 
     entities_config_path: str = "config/entities.yaml"
     confirmation_ttl_seconds: int = 120

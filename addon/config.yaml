@@ -17,7 +17,7 @@ options:
   whatsapp_access_token: ""
   whatsapp_verify_token: ""
   whatsapp_app_secret: ""
-  allowed_sender_number: ""
+  allowed_sender_numbers: ""
   confirmation_ttl_seconds: 120
 schema:
   anthropic_api_key: str
@@ -26,6 +26,6 @@ schema:
   whatsapp_access_token: str
   whatsapp_verify_token: str
   whatsapp_app_secret: str
-  allowed_sender_number: str
+  allowed_sender_numbers: str
   confirmation_ttl_seconds: int
 homeassistant_api: true

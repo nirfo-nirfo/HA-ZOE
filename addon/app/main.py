@@ -37,7 +37,8 @@ async def receive_webhook(request: Request) -> Response:
         return Response(status_code=200)
 
     sender, text = parsed
-    if sender != settings.allowed_sender_number:
+    allowed = {n.strip() for n in settings.allowed_sender_numbers.split(",")}
+    if sender not in allowed:
         logger.warning("Rejected message from unauthorized sender %s", sender)
         return Response(status_code=200)
 
