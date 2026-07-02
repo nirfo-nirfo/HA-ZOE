@@ -21,10 +21,28 @@ def verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
     return hmac.compare_digest(expected, received)
 
 
+import time
+
+_seen_message_ids: dict[str, float] = {}
+_SEEN_TTL = 300  # seconds
+
+
+def _is_duplicate(message_id: str) -> bool:
+    now = time.time()
+    # Expire old entries
+    expired = [k for k, t in _seen_message_ids.items() if now - t > _SEEN_TTL]
+    for k in expired:
+        del _seen_message_ids[k]
+    if message_id in _seen_message_ids:
+        return True
+    _seen_message_ids[message_id] = now
+    return False
+
+
 def extract_message(payload: dict[str, Any]) -> tuple[str, str, str | None] | None:
     """Pulls (sender, text_or_None, audio_media_id_or_None) from a WhatsApp webhook payload.
 
-    Returns None if the payload contains no actionable message.
+    Returns None if the payload contains no actionable message or is a duplicate.
     For text messages: (sender, text, None)
     For audio messages: (sender, None, media_id)
     """
@@ -35,6 +53,9 @@ def extract_message(payload: dict[str, Any]) -> tuple[str, str, str | None] | No
         if not messages:
             return None
         message = messages[0]
+        if _is_duplicate(message["id"]):
+            logger.info("Skipping duplicate message %s", message["id"])
+            return None
         sender = message["from"]
         msg_type = message.get("type")
         if msg_type == "text":
