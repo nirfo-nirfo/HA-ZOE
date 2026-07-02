@@ -13,7 +13,8 @@ from app.logging_config import logger
 from app.lists import add_item, clear_list, get_list, remove_items
 from app.reminders import add_reminder, delete_all_reminders, delete_reminder, list_reminders, pop_due
 from app.settings import settings
-from app.whatsapp import extract_text_message, send_message, verify_signature
+from app.transcribe import transcribe_audio
+from app.whatsapp import extract_message, send_message, verify_signature
 
 app = FastAPI(title="ZOE")
 
@@ -51,15 +52,23 @@ async def receive_webhook(request: Request) -> Response:
         return Response(status_code=403)
 
     payload = await request.json()
-    parsed = extract_text_message(payload)
+    parsed = extract_message(payload)
     if parsed is None:
         return Response(status_code=200)
 
-    sender, text = parsed
+    sender, text, audio_id = parsed
     allowed = {n.strip() for n in settings.allowed_sender_numbers.split(",")}
     if sender not in allowed:
         logger.warning("Rejected message from unauthorized sender %s", sender)
         return Response(status_code=200)
+
+    if audio_id:
+        logger.info("Inbound voice from %s, transcribing...", sender)
+        text = await transcribe_audio(audio_id)
+        if not text:
+            await send_message(sender, "Sorry, I couldn't understand the voice message.")
+            return Response(status_code=200)
+        logger.info("Transcribed voice from %s: %s", sender, text)
 
     logger.info("Inbound from %s: %s", sender, text)
     await _handle_message(sender, text)

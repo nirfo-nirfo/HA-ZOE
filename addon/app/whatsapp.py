@@ -21,8 +21,13 @@ def verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
     return hmac.compare_digest(expected, received)
 
 
-def extract_text_message(payload: dict[str, Any]) -> tuple[str, str] | None:
-    """Pulls (sender_number, text) out of a WhatsApp webhook payload, or None."""
+def extract_message(payload: dict[str, Any]) -> tuple[str, str, str | None] | None:
+    """Pulls (sender, text_or_None, audio_media_id_or_None) from a WhatsApp webhook payload.
+
+    Returns None if the payload contains no actionable message.
+    For text messages: (sender, text, None)
+    For audio messages: (sender, None, media_id)
+    """
     try:
         entry = payload["entry"][0]
         change = entry["changes"][0]["value"]
@@ -30,11 +35,13 @@ def extract_text_message(payload: dict[str, Any]) -> tuple[str, str] | None:
         if not messages:
             return None
         message = messages[0]
-        if message.get("type") != "text":
-            return None
         sender = message["from"]
-        text = message["text"]["body"]
-        return sender, text
+        msg_type = message.get("type")
+        if msg_type == "text":
+            return sender, message["text"]["body"], None
+        if msg_type == "audio":
+            return sender, None, message["audio"]["id"]
+        return None
     except (KeyError, IndexError, TypeError):
         logger.warning("Could not parse WhatsApp webhook payload: %s", payload)
         return None

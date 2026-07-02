@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     confirmation_ttl_seconds: int = 120
     reminders_path: str = "/data/reminders.json"
     lists_path: str = "/data/lists.json"
+    whisper_host: str = "homeassistant.local"
+    whisper_port: int = 10300
 
 
 settings = Settings()

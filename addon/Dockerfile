@@ -1,7 +1,7 @@
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
 FROM $BUILD_FROM
 
-RUN apk add --no-cache python3 py3-pip jq bash
+RUN apk add --no-cache python3 py3-pip jq bash ffmpeg
 
 WORKDIR /app
 COPY requirements.txt .
