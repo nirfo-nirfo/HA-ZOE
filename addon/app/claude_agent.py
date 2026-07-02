@@ -1,4 +1,7 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_IL_TZ = ZoneInfo("Asia/Jerusalem")
 from pathlib import Path
 from typing import Any
 
@@ -152,7 +155,7 @@ def decide_actions(user_text: str, states: dict[str, Any]) -> tuple[list[dict[st
         for e in entities
     )
 
-    now_str = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    now_str = datetime.now(_IL_TZ).strftime("%Y-%m-%dT%H:%M:%S")
 
     message = _client.messages.create(
         model="claude-sonnet-4-5",

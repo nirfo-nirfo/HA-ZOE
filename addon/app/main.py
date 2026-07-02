@@ -1,5 +1,8 @@
 import asyncio
 from datetime import datetime
+from zoneinfo import ZoneInfo
+
+_IL_TZ = ZoneInfo("Asia/Jerusalem")
 
 from fastapi import FastAPI, Request, Response
 
@@ -83,11 +86,14 @@ async def _auto_turn_off_later(sender: str, entity_id: str, domain: str, name: s
 def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
     if tool == "set_reminder":
         try:
-            send_at = datetime.fromisoformat(inp["send_at"]).timestamp()
+            dt = datetime.fromisoformat(inp["send_at"])
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_IL_TZ)
+            send_at = dt.timestamp()
         except (ValueError, KeyError):
             return "I couldn't parse that date/time — please try again."
         reminder = add_reminder(sender, inp["text"], send_at)
-        when = datetime.fromtimestamp(reminder.send_at).strftime("%d/%m/%Y %H:%M")
+        when = datetime.fromtimestamp(reminder.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
         return f"Reminder set ✅ — I'll message you on {when}: {reminder.text}"
 
     if tool == "list_reminders":
@@ -95,7 +101,7 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
         if not pending:
             return "You have no pending reminders."
         lines = [
-            f"• [{r.id}] {datetime.fromtimestamp(r.send_at).strftime('%d/%m %H:%M')} — {r.text}"
+            f"• [{r.id}] {datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime('%d/%m %H:%M')} — {r.text}"
             for r in pending
         ]
         return "Your reminders:\n" + "\n".join(lines)
