@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     entities_config_path: str = "config/entities.yaml"
     confirmation_ttl_seconds: int = 120
     reminders_path: str = "/data/reminders.json"
+    lists_path: str = "/data/lists.json"
 
 
 settings = Settings()

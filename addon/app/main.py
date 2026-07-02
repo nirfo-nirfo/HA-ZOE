@@ -6,10 +6,11 @@ _IL_TZ = ZoneInfo("Asia/Jerusalem")
 
 from fastapi import FastAPI, Request, Response
 
-from app.claude_agent import REMINDER_TOOLS, decide_actions, get_known_entities
+from app.claude_agent import LIST_TOOLS, REMINDER_TOOLS, decide_actions, get_known_entities
 from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
+from app.lists import add_item, clear_list, get_list, remove_items
 from app.reminders import add_reminder, delete_all_reminders, delete_reminder, list_reminders, pop_due
 from app.settings import settings
 from app.whatsapp import extract_text_message, send_message, verify_signature
@@ -119,6 +120,37 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
     return ""
 
 
+def _handle_list_call(sender: str, tool: str, inp: dict) -> str:
+    list_name = inp.get("list_name", "")
+
+    if tool == "add_to_list":
+        text = inp.get("text", "").strip()
+        if not text:
+            return "What should I add to the list?"
+        add_item(list_name, text, sender)
+        return f"Added to {list_name}: {text} ✅"
+
+    if tool == "remove_from_list":
+        text = inp.get("text", "").strip()
+        removed = remove_items(list_name, text)
+        if removed:
+            return f"Removed from {list_name}: {', '.join(removed)} ✅"
+        return f"No items matching '{text}' found in {list_name}."
+
+    if tool == "clear_list":
+        count = clear_list(list_name)
+        return f"{list_name.capitalize()} list cleared ({count} item(s)) ✅"
+
+    if tool == "show_list":
+        items = get_list(list_name)
+        if not items:
+            return f"The {list_name} list is empty."
+        lines = [f"• {item.text}" for item in items]
+        return f"{list_name.capitalize()} list:\n" + "\n".join(lines)
+
+    return ""
+
+
 async def _handle_message(sender: str, text: str) -> None:
     confirmed = pop_if_confirmed(sender, text)
     if confirmed is not None:
@@ -150,6 +182,10 @@ async def _handle_message(sender: str, text: str) -> None:
 
         if tool in REMINDER_TOOLS:
             immediate_replies.append(_handle_reminder_call(sender, tool, inp))
+            continue
+
+        if tool in LIST_TOOLS:
+            immediate_replies.append(_handle_list_call(sender, tool, inp))
             continue
 
         entity_id = inp.get("entity_id")

@@ -19,7 +19,13 @@ _LIST_REMINDERS = "list_reminders"
 _DELETE_REMINDER = "delete_reminder"
 _DELETE_ALL_REMINDERS = "delete_all_reminders"
 
+_ADD_TO_LIST = "add_to_list"
+_REMOVE_FROM_LIST = "remove_from_list"
+_CLEAR_LIST = "clear_list"
+_SHOW_LIST = "show_list"
+
 REMINDER_TOOLS = {_SET_REMINDER, _LIST_REMINDERS, _DELETE_REMINDER, _DELETE_ALL_REMINDERS}
+LIST_TOOLS = {_ADD_TO_LIST, _REMOVE_FROM_LIST, _CLEAR_LIST, _SHOW_LIST}
 
 SYSTEM_PROMPT = (
     "You are ZOE, a personal assistant reachable over WhatsApp that also controls "
@@ -52,7 +58,14 @@ SYSTEM_PROMPT = (
     "When the user asks to see their reminders, call list_reminders. "
     "When the user asks to delete or cancel a specific reminder, call delete_reminder with the reminder id. "
     "When the user asks to delete or cancel ALL reminders, call delete_all_reminders. "
-    "For anything that is not about a known device or reminder — general questions, writing or "
+    "For shared lists (shopping list, task list, to-do list, etc.): "
+    "use add_to_list to add an item, remove_from_list to remove an item by its text, "
+    "clear_list to wipe the whole list, show_list to display it. "
+    "Common list names: 'shopping' for grocery/shopping lists, 'tasks' for to-do/task lists. "
+    "Use the same list name consistently — if the user says 'רשימת קניות' or 'shopping list', use list_name='shopping'. "
+    "If the user says 'משימות' or 'tasks', use list_name='tasks'. "
+    "Lists are shared between all family members. "
+    "For anything that is not about a known device, reminder, or list — general questions, writing or "
     "drafting text, current events, weather, or any other normal personal-assistant "
     "request — do not call any tool. Just answer directly and naturally in plain text, "
     "the same way you would in a normal conversation. Use the web_search tool when you "
@@ -145,6 +158,52 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "description": "Deletes ALL pending reminders for the user at once.",
             "input_schema": {"type": "object", "properties": {}},
         },
+        {
+            "name": _ADD_TO_LIST,
+            "description": "Adds an item to a named shared list (e.g. 'shopping', 'tasks').",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "list_name": {"type": "string", "description": "Name of the list, e.g. 'shopping' or 'tasks'."},
+                    "text": {"type": "string", "description": "The item text to add."},
+                },
+                "required": ["list_name", "text"],
+            },
+        },
+        {
+            "name": _REMOVE_FROM_LIST,
+            "description": "Removes items matching the given text from a named list (case-insensitive substring match).",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "list_name": {"type": "string"},
+                    "text": {"type": "string", "description": "Text to match against items. All matching items are removed."},
+                },
+                "required": ["list_name", "text"],
+            },
+        },
+        {
+            "name": _CLEAR_LIST,
+            "description": "Removes all items from a named list.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "list_name": {"type": "string"},
+                },
+                "required": ["list_name"],
+            },
+        },
+        {
+            "name": _SHOW_LIST,
+            "description": "Shows all current items in a named list.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "list_name": {"type": "string"},
+                },
+                "required": ["list_name"],
+            },
+        },
         {"type": "web_search_20250305", "name": "web_search", "max_uses": 3},
     ]
 
@@ -185,7 +244,7 @@ def decide_actions(user_text: str, states: dict[str, Any]) -> tuple[list[dict[st
         {"tool": block.name, "input": block.input}
         for block in message.content
         if block.type == "tool_use"
-        and block.name in (_CONTROL_TOOL, _STATUS_TOOL, *REMINDER_TOOLS)
+        and block.name in (_CONTROL_TOOL, _STATUS_TOOL, *REMINDER_TOOLS, *LIST_TOOLS)
     ]
     text = "".join(block.text for block in message.content if block.type == "text").strip()
     return tool_calls, text
