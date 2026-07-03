@@ -21,21 +21,47 @@ def verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
     return hmac.compare_digest(expected, received)
 
 
+import json
 import time
+from pathlib import Path
 
+_SEEN_TTL = 604800  # 7 days — Meta's full webhook retry window
+_SEEN_PATH = Path("/data/seen_messages.json")
 _seen_message_ids: dict[str, float] = {}
-_SEEN_TTL = 300  # seconds
+
+
+def _load_seen() -> None:
+    if not _SEEN_PATH.exists():
+        return
+    try:
+        data = json.loads(_SEEN_PATH.read_text(encoding="utf-8"))
+        cutoff = time.time() - _SEEN_TTL
+        _seen_message_ids.update({k: v for k, v in data.items() if v > cutoff})
+    except Exception:
+        pass
+
+
+def _save_seen() -> None:
+    try:
+        _SEEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _SEEN_PATH.write_text(json.dumps(_seen_message_ids), encoding="utf-8")
+    except Exception:
+        pass
+
+
+_load_seen()
 
 
 def _is_duplicate(message_id: str) -> bool:
     now = time.time()
-    # Expire old entries
-    expired = [k for k, t in _seen_message_ids.items() if now - t > _SEEN_TTL]
+    cutoff = now - _SEEN_TTL
+    expired = [k for k, t in _seen_message_ids.items() if t < cutoff]
     for k in expired:
         del _seen_message_ids[k]
     if message_id in _seen_message_ids:
         return True
     _seen_message_ids[message_id] = now
+    _save_seen()
     return False
 
 
