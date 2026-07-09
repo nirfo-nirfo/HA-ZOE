@@ -79,9 +79,11 @@ def extract_message(payload: dict[str, Any]) -> tuple[str, str, str | None] | No
         if not messages:
             return None
         message = messages[0]
-        if _is_duplicate(message["id"]):
-            logger.info("Skipping duplicate message %s", message["id"])
+        msg_id = message["id"]
+        if _is_duplicate(msg_id):
+            logger.info("Skipping duplicate message %s", msg_id)
             return None
+        logger.info("Processing message %s", msg_id)
         sender = message["from"]
         msg_type = message.get("type")
         if msg_type == "text":
