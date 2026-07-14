@@ -4,7 +4,7 @@ set -euo pipefail
 CONFIG_PATH=/data/options.json
 
 export ANTHROPIC_API_KEY="$(jq -r '.anthropic_api_key' "$CONFIG_PATH")"
-export HA_BASE_URL="http://192.168.10.6:8123"
+export HA_BASE_URL="http://192.168.10.150:8123"
 export HA_LONG_LIVED_TOKEN="$(jq -r '.ha_long_lived_token' "$CONFIG_PATH")"
 export WHATSAPP_PHONE_NUMBER_ID="$(jq -r '.whatsapp_phone_number_id' "$CONFIG_PATH")"
 export WHATSAPP_ACCESS_TOKEN="$(jq -r '.whatsapp_access_token' "$CONFIG_PATH")"
