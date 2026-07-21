@@ -1,5 +1,5 @@
 name: "ZOE"
-version: "0.4.2"
+version: "0.4.3"
 slug: "zoe_ha_bridge"
 description: "WhatsApp-controlled Home Assistant assistant powered by Claude"
 arch:

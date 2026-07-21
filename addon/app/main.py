@@ -106,6 +106,14 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
             send_at = dt.timestamp()
         except (ValueError, KeyError):
             return "I couldn't parse that date/time — please try again."
+        if send_at <= datetime.now(tz=_IL_TZ).timestamp():
+            # Would fire on the next scheduler tick instead of at the intended time —
+            # usually means the year was guessed wrong on a date given without one.
+            when = dt.astimezone(_IL_TZ).strftime("%d/%m/%Y %H:%M")
+            return (
+                f"That time ({when}) is in the past, so I didn't set the reminder. "
+                "Please tell me the date again, including the year."
+            )
         reminder = add_reminder(sender, inp["text"], send_at)
         when = datetime.fromtimestamp(reminder.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
         return f"Reminder set ✅ — I'll message you on {when}: {reminder.text}"
