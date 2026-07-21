@@ -123,7 +123,7 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
         if not pending:
             return "You have no pending reminders."
         lines = [
-            f"• [{r.id}] {datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime('%d/%m %H:%M')} — {r.text}"
+            f"• [{r.id}] {datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime('%d/%m/%Y %H:%M')} — {r.text}"
             for r in pending
         ]
         return "Your reminders:\n" + "\n".join(lines)
