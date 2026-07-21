@@ -37,6 +37,19 @@ def _save(reminders: list[Reminder]) -> None:
     )
 
 
+def find_duplicate(sender: str, text: str, send_at: float) -> Reminder | None:
+    """Returns an already-scheduled reminder identical to the one being added.
+
+    Meta sometimes redelivers the same user request as a fresh message with a new
+    id, which the webhook-level dedup in whatsapp.py cannot catch. Matching on the
+    reminder itself keeps that from producing duplicate alerts.
+    """
+    for r in _load():
+        if r.sender == sender and r.text == text and r.send_at == send_at:
+            return r
+    return None
+
+
 def add_reminder(sender: str, text: str, send_at: float) -> Reminder:
     reminders = _load()
     reminder = Reminder(id=str(uuid.uuid4())[:8], sender=sender, text=text, send_at=send_at)

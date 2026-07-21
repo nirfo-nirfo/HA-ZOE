@@ -11,7 +11,14 @@ from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
 from app.lists import add_item, clear_list, get_list, remove_items
-from app.reminders import add_reminder, delete_all_reminders, delete_reminder, list_reminders, pop_due
+from app.reminders import (
+    add_reminder,
+    delete_all_reminders,
+    delete_reminder,
+    find_duplicate,
+    list_reminders,
+    pop_due,
+)
 from app.settings import settings
 from app.transcribe import transcribe_audio
 from app.whatsapp import extract_message, send_message, verify_signature
@@ -114,6 +121,10 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
                 f"That time ({when}) is in the past, so I didn't set the reminder. "
                 "Please tell me the date again, including the year."
             )
+        existing = find_duplicate(sender, inp["text"], send_at)
+        if existing:
+            when = datetime.fromtimestamp(existing.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
+            return f"You already have that reminder set for {when} — keeping the existing one."
         reminder = add_reminder(sender, inp["text"], send_at)
         when = datetime.fromtimestamp(reminder.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
         return f"Reminder set ✅ — I'll message you on {when}: {reminder.text}"
