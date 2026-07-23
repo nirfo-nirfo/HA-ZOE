@@ -10,7 +10,7 @@ from app.claude_agent import LIST_TOOLS, REMINDER_TOOLS, decide_actions, get_kno
 from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
-from app.lists import add_item, clear_list, get_list, remove_items
+from app.lists import add_item, clear_list, get_all_list_names, get_list, remove_items
 from app.reminders import (
     add_reminder,
     delete_all_reminders,
@@ -179,6 +179,13 @@ def _handle_list_call(sender: str, tool: str, inp: dict) -> str:
             return f"The {list_name} list is empty."
         lines = [f"• {item.text}" for item in items]
         return f"{list_name.capitalize()} list:\n" + "\n".join(lines)
+
+    if tool == "show_all_lists":
+        names = get_all_list_names()
+        if not names:
+            return "You don't have any lists yet."
+        lines = [f"• {name} ({count})" for name, count in names]
+        return "Your lists:\n" + "\n".join(lines)
 
     return ""
 

@@ -72,3 +72,9 @@ def clear_list(list_name: str) -> int:
 
 def get_list(list_name: str) -> list[ListItem]:
     return _load().get(list_name, [])
+
+
+def get_all_list_names() -> list[tuple[str, int]]:
+    """Returns (name, item_count) for every non-empty list, sorted by name."""
+    data = _load()
+    return sorted((name, len(items)) for name, items in data.items() if items)

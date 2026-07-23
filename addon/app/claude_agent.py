@@ -23,9 +23,10 @@ _ADD_TO_LIST = "add_to_list"
 _REMOVE_FROM_LIST = "remove_from_list"
 _CLEAR_LIST = "clear_list"
 _SHOW_LIST = "show_list"
+_SHOW_ALL_LISTS = "show_all_lists"
 
 REMINDER_TOOLS = {_SET_REMINDER, _LIST_REMINDERS, _DELETE_REMINDER, _DELETE_ALL_REMINDERS}
-LIST_TOOLS = {_ADD_TO_LIST, _REMOVE_FROM_LIST, _CLEAR_LIST, _SHOW_LIST}
+LIST_TOOLS = {_ADD_TO_LIST, _REMOVE_FROM_LIST, _CLEAR_LIST, _SHOW_LIST, _SHOW_ALL_LISTS}
 
 SYSTEM_PROMPT = (
     "You are ZOE, a personal assistant reachable over WhatsApp that also controls "
@@ -61,12 +62,17 @@ SYSTEM_PROMPT = (
     "When the user asks to see their reminders, call list_reminders. "
     "When the user asks to delete or cancel a specific reminder, call delete_reminder with the reminder id. "
     "When the user asks to delete or cancel ALL reminders, call delete_all_reminders. "
-    "For shared lists (shopping list, task list, to-do list, etc.): "
-    "use add_to_list to add an item, remove_from_list to remove an item by its text, "
-    "clear_list to wipe the whole list, show_list to display it. "
-    "Common list names: 'shopping' for grocery/shopping lists, 'tasks' for to-do/task lists. "
-    "Use the same list name consistently — if the user says 'רשימת קניות' or 'shopping list', use list_name='shopping'. "
-    "If the user says 'משימות' or 'tasks', use list_name='tasks'. "
+    "For shared lists: use add_to_list to add an item, remove_from_list to remove an item by "
+    "its text, clear_list to wipe the whole list, show_list to display one list, and "
+    "show_all_lists to see the names of all existing lists. "
+    "The user can have any number of lists on any topic — use whatever list name the user "
+    "names (e.g. 'ספרים', 'סרטים לראות', 'מתנות', 'packing'). Derive list_name from the user's "
+    "own wording and keep it consistent for that same list across messages. "
+    "Two names are canonical so the common lists don't fragment: use list_name='shopping' for "
+    "grocery/shopping lists ('רשימת קניות', 'shopping list'), and list_name='tasks' for "
+    "to-do/task lists ('משימות', 'tasks', 'to-do'). For every other topic, use the user's name for it. "
+    "If the user refers to a list whose exact name you are unsure of, call show_all_lists first "
+    "to see what exists rather than guessing or creating a near-duplicate. "
     "Lists are shared between all family members. "
     "For anything that is not about a known device, reminder, or list — general questions, writing or "
     "drafting text, current events, weather, or any other normal personal-assistant "
@@ -206,6 +212,12 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 },
                 "required": ["list_name"],
             },
+        },
+        {
+            "name": _SHOW_ALL_LISTS,
+            "description": "Lists the names of all existing lists and how many items each has. "
+            "Use when the user asks what lists they have (e.g. 'what lists do I have?', 'איזה רשימות יש לי?').",
+            "input_schema": {"type": "object", "properties": {}},
         },
         {"type": "web_search_20250305", "name": "web_search", "max_uses": 3},
     ]
