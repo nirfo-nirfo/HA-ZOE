@@ -12,6 +12,7 @@ from app.ha_client import ha_client
 from app.logging_config import logger
 from app.lists import add_item, clear_list, get_all_list_names, get_list, remove_items
 from app.reminders import (
+    RECURRENCES,
     add_reminder,
     delete_all_reminders,
     delete_reminder,
@@ -121,20 +122,25 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
                 f"That time ({when}) is in the past, so I didn't set the reminder. "
                 "Please tell me the date again, including the year."
             )
-        existing = find_duplicate(sender, inp["text"], send_at)
+        recurrence = inp.get("recurrence")
+        if recurrence not in RECURRENCES:
+            recurrence = None
+        existing = find_duplicate(sender, inp["text"], send_at, recurrence)
         if existing:
             when = datetime.fromtimestamp(existing.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
             return f"You already have that reminder set for {when} — keeping the existing one."
-        reminder = add_reminder(sender, inp["text"], send_at)
+        reminder = add_reminder(sender, inp["text"], send_at, recurrence)
         when = datetime.fromtimestamp(reminder.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
-        return f"Reminder set ✅ — I'll message you on {when}: {reminder.text}"
+        repeat = f" (repeats {recurrence})" if recurrence else ""
+        return f"Reminder set ✅{repeat} — I'll message you on {when}: {reminder.text}"
 
     if tool == "list_reminders":
         pending = list_reminders(sender)
         if not pending:
             return "You have no pending reminders."
         lines = [
-            f"• [{r.id}] {datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime('%d/%m/%Y %H:%M')} — {r.text}"
+            f"• [{r.id}] {datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime('%d/%m/%Y %H:%M')}"
+            f"{f' 🔁 {r.recurrence}' if r.recurrence else ''} — {r.text}"
             for r in pending
         ]
         return "Your reminders:\n" + "\n".join(lines)

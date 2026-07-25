@@ -59,6 +59,10 @@ SYSTEM_PROMPT = (
     "When the user gives a calendar date without a year (e.g. '8th of January'), always pick "
     "the next occurrence of that date in the future — if it has already passed this year, use "
     "next year. send_at must never be in the past. "
+    "For a repeating reminder, set the recurrence field (daily/weekly/monthly/yearly) — for "
+    "example a birthday every year on the same date is recurrence='yearly', and take daily "
+    "medication is recurrence='daily'. send_at is the first occurrence; ZOE reschedules the rest "
+    "automatically, so create just ONE reminder, not one per date. Omit recurrence for a one-off. "
     "When the user asks to see their reminders, call list_reminders. "
     "When the user asks to delete or cancel a specific reminder, call delete_reminder with the reminder id. "
     "When the user asks to delete or cancel ALL reminders, call delete_all_reminders. "
@@ -140,7 +144,15 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "text": {"type": "string", "description": "The reminder message to send."},
                     "send_at": {
                         "type": "string",
-                        "description": "ISO 8601 datetime when to send the reminder, e.g. 2026-07-03T09:00:00.",
+                        "description": "ISO 8601 datetime of the first (or only) time to send the reminder, "
+                        "e.g. 2026-07-03T09:00:00.",
+                    },
+                    "recurrence": {
+                        "type": "string",
+                        "enum": ["daily", "weekly", "monthly", "yearly"],
+                        "description": "Optional. Omit for a one-time reminder. If set, the reminder "
+                        "repeats forever at this interval starting from send_at (e.g. 'yearly' for a "
+                        "birthday, 'daily' for a daily medication).",
                     },
                 },
                 "required": ["text", "send_at"],
