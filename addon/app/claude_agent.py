@@ -63,7 +63,10 @@ SYSTEM_PROMPT = (
     "example a birthday every year on the same date is recurrence='yearly', and take daily "
     "medication is recurrence='daily'. send_at is the first occurrence; ZOE reschedules the rest "
     "automatically, so create just ONE reminder, not one per date. Omit recurrence for a one-off. "
-    "When the user asks to see their reminders, call list_reminders. "
+    "When the user asks to see their reminders, call list_reminders. If they ask for only a "
+    "certain kind — e.g. 'my doctor appointments' or 'the one-off reminders' or 'non-recurring' "
+    "(kind='one_time'), or 'my birthdays'/'the yearly ones' (kind='yearly'), etc. — pass the "
+    "matching kind so the recurring ones don't bury the one-time ones. Omit kind to show all. "
     "When the user asks to delete or cancel a specific reminder, call delete_reminder with the reminder id. "
     "When the user asks to delete or cancel ALL reminders, call delete_all_reminders. "
     "For shared lists: use add_to_list to add an item, remove_from_list to remove an item by "
@@ -160,8 +163,20 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
         },
         {
             "name": _LIST_REMINDERS,
-            "description": "Returns all pending reminders for the user.",
-            "input_schema": {"type": "object", "properties": {}},
+            "description": "Returns the user's pending reminders. By default returns all of them, "
+            "grouped by repeat interval. Pass kind to show only one group.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["one_time", "daily", "weekly", "monthly", "yearly"],
+                        "description": "Optional filter. 'one_time' = only non-recurring reminders "
+                        "(e.g. doctor appointments, one-off errands); daily/weekly/monthly/yearly = "
+                        "only reminders that repeat at that interval. Omit to show everything.",
+                    },
+                },
+            },
         },
         {
             "name": _DELETE_REMINDER,

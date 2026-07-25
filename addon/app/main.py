@@ -105,6 +105,21 @@ async def _auto_turn_off_later(sender: str, entity_id: str, domain: str, name: s
         await send_message(sender, f"{name}: failed to auto turn-off — {detail}")
 
 
+def _fmt_reminder(r) -> str:
+    when = datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
+    return f"• [{r.id}] {when} — {r.text}"
+
+
+# (key in reminder.recurrence, section title) in display order; one_time = no recurrence.
+_REMINDER_GROUPS = [
+    ("one_time", "One-time"),
+    ("daily", "🔁 Daily"),
+    ("weekly", "🔁 Weekly"),
+    ("monthly", "🔁 Monthly"),
+    ("yearly", "🔁 Yearly"),
+]
+
+
 def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
     if tool == "set_reminder":
         try:
@@ -135,15 +150,25 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
         return f"Reminder set ✅{repeat} — I'll message you on {when}: {reminder.text}"
 
     if tool == "list_reminders":
-        pending = list_reminders(sender)
+        kind = inp.get("kind", "all")
+        if kind != "one_time" and kind not in RECURRENCES:
+            kind = "all"
+        pending = list_reminders(sender, kind)
         if not pending:
-            return "You have no pending reminders."
-        lines = [
-            f"• [{r.id}] {datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime('%d/%m/%Y %H:%M')}"
-            f"{f' 🔁 {r.recurrence}' if r.recurrence else ''} — {r.text}"
-            for r in pending
-        ]
-        return "Your reminders:\n" + "\n".join(lines)
+            if kind == "all":
+                return "You have no pending reminders."
+            label = "one-time" if kind == "one_time" else kind
+            return f"You have no {label} reminders."
+        if kind != "all":
+            label = "one-time" if kind == "one_time" else kind
+            return f"Your {label} reminders:\n" + "\n".join(_fmt_reminder(r) for r in pending)
+        # No filter: group by type so recurring reminders don't bury the one-off ones.
+        sections = []
+        for key, title in _REMINDER_GROUPS:
+            bucket = [r for r in pending if (r.recurrence or "one_time") == key]
+            if bucket:
+                sections.append(f"{title}:\n" + "\n".join(_fmt_reminder(r) for r in bucket))
+        return "Your reminders:\n\n" + "\n\n".join(sections)
 
     if tool == "delete_reminder":
         rid = inp.get("id", "")

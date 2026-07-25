@@ -113,8 +113,19 @@ def add_reminder(
     return reminder
 
 
-def list_reminders(sender: str) -> list[Reminder]:
-    return [r for r in _load() if r.sender == sender and r.send_at > time.time()]
+def list_reminders(sender: str, kind: str = "all") -> list[Reminder]:
+    """Returns the user's pending reminders, sorted by time.
+
+    kind filters by recurrence: 'all' (default), 'one_time' for non-recurring
+    reminders only, or one of RECURRENCES for a specific repeat interval.
+    """
+    now = time.time()
+    items = [r for r in _load() if r.sender == sender and r.send_at > now]
+    if kind == "one_time":
+        items = [r for r in items if not r.recurrence]
+    elif kind in RECURRENCES:
+        items = [r for r in items if r.recurrence == kind]
+    return sorted(items, key=lambda r: r.send_at)
 
 
 def delete_reminder(reminder_id: str, sender: str) -> bool:
