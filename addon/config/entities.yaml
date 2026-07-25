@@ -62,3 +62,39 @@ entities:
     domain: automation
     services: [trigger, turn_on, turn_off]
     risky: false
+
+  - entity_id: climate.c0393782dcc2
+    name: "מזגן סלון"
+    domain: climate
+    services: [turn_on, turn_off, set_temperature, set_hvac_mode, set_fan_mode]
+    risky: false
+
+  - entity_id: climate.c03937b28bc0
+    name: "מזגן חדר עבודה"
+    domain: climate
+    services: [turn_on, turn_off, set_temperature, set_hvac_mode, set_fan_mode]
+    risky: false
+
+  - entity_id: climate.c03937b28c62
+    name: "מזגן חדר הורים"
+    domain: climate
+    services: [turn_on, turn_off, set_temperature, set_hvac_mode, set_fan_mode]
+    risky: false
+
+  - entity_id: climate.c03937b2fbd0
+    name: "מזגן חדר מיקה"
+    domain: climate
+    services: [turn_on, turn_off, set_temperature, set_hvac_mode, set_fan_mode]
+    risky: false
+
+  - entity_id: climate.c03937b2fbd8
+    name: "מזגן ממד"
+    domain: climate
+    services: [turn_on, turn_off, set_temperature, set_hvac_mode, set_fan_mode]
+    risky: false
+
+  - entity_id: climate.c03937b2fcaf
+    name: "מזגן חדר מילי"
+    domain: climate
+    services: [turn_on, turn_off, set_temperature, set_hvac_mode, set_fan_mode]
+    risky: false
