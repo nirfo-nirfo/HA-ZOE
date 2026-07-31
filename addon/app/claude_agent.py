@@ -273,8 +273,8 @@ def decide_actions(user_text: str, states: dict[str, Any]) -> tuple[list[dict[st
     now_str = datetime.now(_IL_TZ).strftime("%Y-%m-%dT%H:%M:%S")
 
     message = _client.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=1024,
+        model="claude-opus-5",
+        max_tokens=2048,
         system=SYSTEM_PROMPT,
         tools=tools,
         messages=[
