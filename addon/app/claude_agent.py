@@ -107,9 +107,18 @@ SYSTEM_PROMPT = (
     "drafting text, current events, weather, or any other normal personal-assistant "
     "request — do not call any tool. Just answer directly and naturally in plain text, "
     "the same way you would in a normal conversation. Use the web_search tool when you "
-    "need current or real-world information you would otherwise be unsure about. Reply "
-    "in whatever language the user wrote in."
+    "need current or real-world information you would otherwise be unsure about. "
+    "You work in a tool-use loop: after you call a tool you will be shown its result, and you "
+    "may call more tools before answering. Chain steps when a task needs it — e.g. call "
+    "get_device_status, read the result, then decide whether to act; or call list_reminders to "
+    "read a reminder's exact time before rescheduling it. When you have finished what the user "
+    "asked, reply with one short, natural confirmation of what you did — do not paste raw tool "
+    "output, entity_ids, or internal ✅ strings verbatim; phrase it for a person. "
+    "Reply in whatever language the user wrote in."
 )
+
+MODEL = "claude-opus-5"
+MAX_TOKENS = 2048
 
 
 def _load_entities() -> list[dict[str, Any]]:
@@ -309,43 +318,31 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def decide_actions(user_text: str, states: dict[str, Any]) -> tuple[list[dict[str, Any]], str]:
-    """Returns (tool_calls, assistant_text). tool_calls is a list of
-    {"tool": <name>, "input": <dict>}; assistant_text is any plain-text reply Claude
-    produced (used as a general-assistant answer when no device tool was called)."""
+def initial_context(user_text: str, states: dict[str, Any]) -> str:
+    """Builds the first user message: current time, device catalog + live state, request."""
     entities = _load_entities()
-    tools = _build_tools(entities)
-
     entity_summary = "\n".join(
         f"- {e['entity_id']} ({e['name']}): domain={e['domain']}, "
         f"services={e['services']}, state={states.get(e['entity_id'], {}).get('state', 'unknown')}"
         for e in entities
     )
-
     now_str = datetime.now(_IL_TZ).strftime("%Y-%m-%dT%H:%M:%S")
-
-    message = _client.messages.create(
-        model="claude-opus-5",
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        tools=tools,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Current datetime (Israel): {now_str}\n"
-                    f"Known devices:\n{entity_summary}\n\n"
-                    f"User message: {user_text}"
-                ),
-            }
-        ],
+    return (
+        f"Current datetime (Israel): {now_str}\n"
+        f"Known devices:\n{entity_summary}\n\n"
+        f"User message: {user_text}"
     )
 
-    tool_calls = [
-        {"tool": block.name, "input": block.input}
-        for block in message.content
-        if block.type == "tool_use"
-        and block.name in (_CONTROL_TOOL, _STATUS_TOOL, *REMINDER_TOOLS, *LIST_TOOLS)
-    ]
-    text = "".join(block.text for block in message.content if block.type == "text").strip()
-    return tool_calls, text
+
+def run_model(messages: list[dict[str, Any]]) -> Any:
+    """One turn of the agentic loop: sends the running transcript and returns the raw
+    Anthropic message (content blocks + stop_reason). The caller executes any tool_use
+    blocks, appends the results, and calls again until stop_reason is not tool_use."""
+    tools = _build_tools(_load_entities())
+    return _client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        system=SYSTEM_PROMPT,
+        tools=tools,
+        messages=messages,
+    )

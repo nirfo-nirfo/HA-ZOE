@@ -6,7 +6,13 @@ _IL_TZ = ZoneInfo("Asia/Jerusalem")
 
 from fastapi import FastAPI, Request, Response
 
-from app.claude_agent import LIST_TOOLS, REMINDER_TOOLS, decide_actions, get_known_entities
+from app.claude_agent import (
+    LIST_TOOLS,
+    REMINDER_TOOLS,
+    get_known_entities,
+    initial_context,
+    run_model,
+)
 from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
@@ -27,6 +33,9 @@ from app.transcribe import transcribe_audio
 from app.whatsapp import extract_message, send_message, verify_signature
 
 app = FastAPI(title="ZOE")
+
+# Safety cap on the agentic tool-use loop, so a confused turn can't call tools forever.
+_MAX_AGENT_ITERS = 6
 
 
 @app.on_event("startup")
@@ -267,6 +276,57 @@ def _handle_list_call(sender: str, tool: str, inp: dict) -> str:
     return ""
 
 
+async def _dispatch_tool(
+    sender: str, tool: str, inp: dict, known_entities: dict, pending_actions: list
+) -> str:
+    """Executes one tool call and returns a result string fed back to the model.
+    Risky device actions are not executed here — they're queued for user confirmation."""
+    if tool in REMINDER_TOOLS:
+        return _handle_reminder_call(sender, tool, inp)
+
+    if tool in LIST_TOOLS:
+        return _handle_list_call(sender, tool, inp)
+
+    entity_id = inp.get("entity_id")
+    entity_def = known_entities.get(entity_id)
+    if entity_def is None:
+        logger.error("Model returned unknown entity_id: %s", entity_id)
+        return "That device isn't in the known list — refused for safety. Tell the user you can't act on it."
+
+    if tool == "get_device_status":
+        live = await ha_client.get_states([entity_id])
+        state = live.get(entity_id, {}).get("state", "unknown")
+        return f"{entity_def['name']} is currently: {state}"
+
+    if tool == "control_device":
+        domain = inp.get("domain")
+        service = inp.get("service")
+        if not domain or not service:
+            return "control_device needs both a domain and a service."
+        service_data = inp.get("service_data") or {}
+        duration_minutes = inp.get("duration_minutes")
+        description = f"{entity_def['name']}: {service}"
+
+        if entity_def.get("risky"):
+            pending_actions.append(make_pending(entity_id, domain, service, service_data, description))
+            logger.info("Risky action queued for confirmation: %s", description)
+            return (
+                "This is a sensitive action and must NOT be treated as done. It is queued and will "
+                "run only after the user explicitly confirms. Tell the user what will happen and ask "
+                "them to reply 'yes' to confirm — do not say it has been done."
+            )
+
+        reply = await _execute_control_action(entity_id, domain, service, service_data, description)
+        if duration_minutes and service == "turn_on" and "✅" in reply:
+            asyncio.create_task(
+                _auto_turn_off_later(sender, entity_id, domain, entity_def["name"], duration_minutes)
+            )
+            reply += f" (will auto turn-off in {duration_minutes:g} min)"
+        return reply
+
+    return f"Unknown tool: {tool}"
+
+
 async def _handle_message(sender: str, text: str) -> None:
     confirmed = pop_if_confirmed(sender, text)
     if confirmed is not None:
@@ -284,61 +344,38 @@ async def _handle_message(sender: str, text: str) -> None:
     known_entities = get_known_entities()
     states = await ha_client.get_states(list(known_entities.keys()))
 
-    tool_calls, assistant_text = decide_actions(text, states)
-    if not tool_calls:
-        await send_message(sender, assistant_text or "I'm not sure what you mean — could you rephrase?")
-        return
+    messages: list = [{"role": "user", "content": initial_context(text, states)}]
+    pending_actions: list = []
+    final_text = ""
 
-    immediate_replies: list[str] = []
-    pending_actions = []
+    for _ in range(_MAX_AGENT_ITERS):
+        message = await asyncio.to_thread(run_model, messages)
+        tool_uses = [b for b in message.content if b.type == "tool_use"]
 
-    for call in tool_calls:
-        tool = call["tool"]
-        inp = call["input"]
-
-        if tool in REMINDER_TOOLS:
-            immediate_replies.append(_handle_reminder_call(sender, tool, inp))
+        if tool_uses:
+            messages.append({"role": "assistant", "content": message.content})
+            results = []
+            for tu in tool_uses:
+                logger.info("Tool call: %s %s", tu.name, tu.input)
+                result = await _dispatch_tool(sender, tu.name, tu.input, known_entities, pending_actions)
+                results.append({"type": "tool_result", "tool_use_id": tu.id, "content": result})
+            messages.append({"role": "user", "content": results})
             continue
 
-        if tool in LIST_TOOLS:
-            immediate_replies.append(_handle_list_call(sender, tool, inp))
+        if message.stop_reason == "pause_turn":
+            # A server tool (web search) paused; re-send to let it resume.
+            messages.append({"role": "assistant", "content": message.content})
             continue
 
-        entity_id = inp.get("entity_id")
-        entity_def = known_entities.get(entity_id)
-        if entity_def is None:
-            logger.error("Claude returned unknown entity_id: %s", entity_id)
-            immediate_replies.append("I tried to act on a device I don't recognize. Ignored for safety.")
-            continue
-
-        if tool == "get_device_status":
-            state = states.get(entity_id, {}).get("state", "unknown")
-            immediate_replies.append(f"{entity_def['name']}: {state}")
-            continue
-
-        domain = inp["domain"]
-        service = inp["service"]
-        service_data = inp.get("service_data") or {}
-        duration_minutes = inp.get("duration_minutes")
-        description = f"{entity_def['name']}: {service}"
-
-        if entity_def.get("risky"):
-            pending_actions.append(make_pending(entity_id, domain, service, service_data, description))
-            continue
-
-        reply = await _execute_control_action(entity_id, domain, service, service_data, description)
-        if duration_minutes and service == "turn_on" and reply.startswith(entity_def["name"]):
-            asyncio.create_task(
-                _auto_turn_off_later(sender, entity_id, domain, entity_def["name"], duration_minutes)
-            )
-            reply += f" (will turn off in {duration_minutes:g} min)"
-        immediate_replies.append(reply)
+        final_text = "".join(b.text for b in message.content if b.type == "text").strip()
+        break
+    else:
+        final_text = final_text or "סליחה, זה נהיה מסובך מדי ולא הצלחתי לסיים."
 
     if pending_actions:
         store_pending(sender, pending_actions)
-        descriptions = ", ".join(a.description for a in pending_actions)
-        logger.info("Risky actions pending confirmation: %s", descriptions)
-        immediate_replies.append(f"This will: {descriptions}. Reply 'yes' to confirm.")
 
-    if immediate_replies:
-        await send_message(sender, "\n".join(immediate_replies))
+    if final_text:
+        await send_message(sender, final_text)
+    elif not pending_actions:
+        await send_message(sender, "I'm not sure what you mean — could you rephrase?")
