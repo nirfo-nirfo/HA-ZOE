@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     reminders_path: str = "/data/reminders.json"
     lists_path: str = "/data/lists.json"
     memory_path: str = "/data/memory.json"
-    whisper_host: str = "192.168.10.5"
+    whisper_host: str = "192.168.10.150"
     whisper_port: int = 10300
 
 
