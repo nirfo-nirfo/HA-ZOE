@@ -8,6 +8,7 @@ from typing import Any
 import yaml
 from anthropic import Anthropic
 
+from app.memory import all_facts
 from app.settings import settings
 
 _client = Anthropic(api_key=settings.anthropic_api_key)
@@ -27,6 +28,9 @@ _CLEAR_LIST = "clear_list"
 _SHOW_LIST = "show_list"
 _SHOW_ALL_LISTS = "show_all_lists"
 
+_REMEMBER = "remember"
+_FORGET = "forget"
+
 REMINDER_TOOLS = {
     _SET_REMINDER,
     _LIST_REMINDERS,
@@ -36,6 +40,7 @@ REMINDER_TOOLS = {
     _DELETE_ALL_REMINDERS,
 }
 LIST_TOOLS = {_ADD_TO_LIST, _REMOVE_FROM_LIST, _CLEAR_LIST, _SHOW_LIST, _SHOW_ALL_LISTS}
+MEMORY_TOOLS = {_REMEMBER, _FORGET}
 
 SYSTEM_PROMPT = (
     "You are ZOE, a personal assistant reachable over WhatsApp that also controls "
@@ -108,6 +113,13 @@ SYSTEM_PROMPT = (
     "request — do not call any tool. Just answer directly and naturally in plain text, "
     "the same way you would in a normal conversation. Use the web_search tool when you "
     "need current or real-world information you would otherwise be unsure about. "
+    "You have a long-term memory of durable facts about the user and household — shown to you "
+    "each turn under 'Known facts'. Use them naturally without being asked (e.g. if you know the "
+    "salon AC is preferred at 23°, use that when they say 'turn on the AC in the salon'). When the "
+    "user tells you a lasting preference, name, routine, or fact worth keeping ('we're vegetarian', "
+    "'my wife is Dana', 'I like the blinds at 50%'), call remember to save it. Do NOT remember "
+    "one-off or transient things (a single shopping item, a specific reminder) — those have their "
+    "own tools. When a saved fact becomes wrong or the user asks you to forget it, call forget. "
     "You work in a tool-use loop: after you call a tool you will be shown its result, and you "
     "may call more tools before answering. Chain steps when a task needs it — e.g. call "
     "get_device_status, read the result, then decide whether to act; or call list_reminders to "
@@ -314,6 +326,33 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "Use when the user asks what lists they have (e.g. 'what lists do I have?', 'איזה רשימות יש לי?').",
             "input_schema": {"type": "object", "properties": {}},
         },
+        {
+            "name": _REMEMBER,
+            "description": "Saves a durable fact about the user or household to long-term memory "
+            "(a preference, name, routine, or standing fact). Not for one-off items or reminders.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "The fact to remember, as a short standalone sentence, "
+                        "e.g. 'The salon AC is preferred at 23 degrees.'",
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+        {
+            "name": _FORGET,
+            "description": "Removes a previously remembered fact, matched by a snippet of its text.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "A snippet of the fact to forget."},
+                },
+                "required": ["text"],
+            },
+        },
         {"type": "web_search_20250305", "name": "web_search", "max_uses": 3},
     ]
 
@@ -327,9 +366,16 @@ def initial_context(user_text: str, states: dict[str, Any]) -> str:
         for e in entities
     )
     now_str = datetime.now(_IL_TZ).strftime("%Y-%m-%dT%H:%M:%S")
+    facts = all_facts()
+    facts_block = (
+        "Known facts (long-term memory):\n" + "\n".join(f"- {f.text}" for f in facts) + "\n\n"
+        if facts
+        else ""
+    )
     return (
         f"Current datetime (Israel): {now_str}\n"
         f"Known devices:\n{entity_summary}\n\n"
+        f"{facts_block}"
         f"User message: {user_text}"
     )
 

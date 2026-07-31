@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request, Response
 
 from app.claude_agent import (
     LIST_TOOLS,
+    MEMORY_TOOLS,
     REMINDER_TOOLS,
     get_known_entities,
     initial_context,
@@ -17,6 +18,7 @@ from app.confirmation import make_pending, pop_if_confirmed, store_pending
 from app.ha_client import ha_client
 from app.logging_config import logger
 from app.lists import add_item, clear_list, get_all_list_names, get_list, remove_items
+from app.memory import forget, remember
 from app.reminders import (
     RECURRENCES,
     add_reminder,
@@ -276,6 +278,25 @@ def _handle_list_call(sender: str, tool: str, inp: dict) -> str:
     return ""
 
 
+def _handle_memory_call(tool: str, inp: dict) -> str:
+    text = inp.get("text", "").strip()
+    if tool == "remember":
+        if not text:
+            return "Nothing to remember."
+        fact = remember(text)
+        if fact is None:
+            return f"Already in memory: {text}"
+        return f"Remembered: {text}"
+
+    if tool == "forget":
+        removed = forget(text)
+        if removed:
+            return "Forgot: " + "; ".join(removed)
+        return f"No remembered fact matching '{text}'."
+
+    return ""
+
+
 async def _dispatch_tool(
     sender: str, tool: str, inp: dict, known_entities: dict, pending_actions: list
 ) -> str:
@@ -286,6 +307,9 @@ async def _dispatch_tool(
 
     if tool in LIST_TOOLS:
         return _handle_list_call(sender, tool, inp)
+
+    if tool in MEMORY_TOOLS:
+        return _handle_memory_call(tool, inp)
 
     entity_id = inp.get("entity_id")
     entity_def = known_entities.get(entity_id)
