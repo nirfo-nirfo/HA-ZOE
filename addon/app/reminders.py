@@ -128,6 +128,34 @@ def list_reminders(sender: str, kind: str = "all") -> list[Reminder]:
     return sorted(items, key=lambda r: r.send_at)
 
 
+def find_matching(sender: str, identifier: str) -> list[Reminder]:
+    """Resolves a reminder from a snippet of its text OR its exact id.
+
+    Returns the pending (future) reminders that match, so callers can act by
+    description ('the soccer signup reminder') without knowing the id. An exact
+    id match wins outright; otherwise it's a case-insensitive substring on text.
+    """
+    ident = identifier.strip()
+    now = time.time()
+    pending = [r for r in _load() if r.sender == sender and r.send_at > now]
+    by_id = [r for r in pending if r.id == ident]
+    if by_id:
+        return by_id
+    needle = ident.lower()
+    return [r for r in pending if needle and needle in r.text.lower()]
+
+
+def reschedule(reminder_id: str, sender: str, send_at: float) -> bool:
+    """Moves an existing reminder to a new time, keeping its text and recurrence."""
+    reminders = _load()
+    for i, r in enumerate(reminders):
+        if r.id == reminder_id and r.sender == sender:
+            reminders[i] = replace(r, send_at=send_at)
+            _save(reminders)
+            return True
+    return False
+
+
 def delete_reminder(reminder_id: str, sender: str) -> bool:
     reminders = _load()
     new = [r for r in reminders if not (r.id == reminder_id and r.sender == sender)]

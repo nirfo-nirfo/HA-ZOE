@@ -17,8 +17,10 @@ from app.reminders import (
     delete_all_reminders,
     delete_reminder,
     find_duplicate,
+    find_matching,
     list_reminders,
     pop_due,
+    reschedule,
 )
 from app.settings import settings
 from app.transcribe import transcribe_audio
@@ -175,6 +177,50 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
         if delete_reminder(rid, sender):
             return f"Reminder {rid} deleted ✅"
         return f"Reminder {rid} not found."
+
+    if tool == "delete_reminder_by_text":
+        query = inp.get("text", "").strip()
+        if not query:
+            return "Which reminder should I cancel?"
+        matches = find_matching(sender, query)
+        if not matches:
+            return f"I couldn't find a reminder matching '{query}'."
+        if len(matches) > 1:
+            return (
+                f"Several reminders match '{query}' — which one? Reply with its id:\n"
+                + "\n".join(_fmt_reminder(r) for r in matches)
+            )
+        r = matches[0]
+        delete_reminder(r.id, sender)
+        when = datetime.fromtimestamp(r.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
+        return f"Cancelled ✅ — {when}: {r.text}"
+
+    if tool == "reschedule_reminder":
+        query = inp.get("text", "").strip()
+        try:
+            dt = datetime.fromisoformat(inp["send_at"])
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=_IL_TZ)
+            send_at = dt.timestamp()
+        except (ValueError, KeyError):
+            return "I couldn't parse that new date/time — please try again."
+        if send_at <= datetime.now(tz=_IL_TZ).timestamp():
+            when = dt.astimezone(_IL_TZ).strftime("%d/%m/%Y %H:%M")
+            return f"That new time ({when}) is in the past, so I didn't move the reminder."
+        if not query:
+            return "Which reminder should I move?"
+        matches = find_matching(sender, query)
+        if not matches:
+            return f"I couldn't find a reminder matching '{query}'."
+        if len(matches) > 1:
+            return (
+                f"Several reminders match '{query}' — which one? Reply with its id:\n"
+                + "\n".join(_fmt_reminder(r) for r in matches)
+            )
+        r = matches[0]
+        reschedule(r.id, sender, send_at)
+        when = datetime.fromtimestamp(send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")
+        return f"Moved ✅ — now {when}: {r.text}"
 
     if tool == "delete_all_reminders":
         count = delete_all_reminders(sender)

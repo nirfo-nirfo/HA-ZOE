@@ -17,6 +17,8 @@ _STATUS_TOOL = "get_device_status"
 _SET_REMINDER = "set_reminder"
 _LIST_REMINDERS = "list_reminders"
 _DELETE_REMINDER = "delete_reminder"
+_DELETE_REMINDER_BY_TEXT = "delete_reminder_by_text"
+_RESCHEDULE_REMINDER = "reschedule_reminder"
 _DELETE_ALL_REMINDERS = "delete_all_reminders"
 
 _ADD_TO_LIST = "add_to_list"
@@ -25,7 +27,14 @@ _CLEAR_LIST = "clear_list"
 _SHOW_LIST = "show_list"
 _SHOW_ALL_LISTS = "show_all_lists"
 
-REMINDER_TOOLS = {_SET_REMINDER, _LIST_REMINDERS, _DELETE_REMINDER, _DELETE_ALL_REMINDERS}
+REMINDER_TOOLS = {
+    _SET_REMINDER,
+    _LIST_REMINDERS,
+    _DELETE_REMINDER,
+    _DELETE_REMINDER_BY_TEXT,
+    _RESCHEDULE_REMINDER,
+    _DELETE_ALL_REMINDERS,
+}
 LIST_TOOLS = {_ADD_TO_LIST, _REMOVE_FROM_LIST, _CLEAR_LIST, _SHOW_LIST, _SHOW_ALL_LISTS}
 
 SYSTEM_PROMPT = (
@@ -67,7 +76,13 @@ SYSTEM_PROMPT = (
     "certain kind — e.g. 'my doctor appointments' or 'the one-off reminders' or 'non-recurring' "
     "(kind='one_time'), or 'my birthdays'/'the yearly ones' (kind='yearly'), etc. — pass the "
     "matching kind so the recurring ones don't bury the one-time ones. Omit kind to show all. "
-    "When the user asks to delete or cancel a specific reminder, call delete_reminder with the reminder id. "
+    "When the user cancels a specific reminder by describing it (not by id), call "
+    "delete_reminder_by_text with a snippet of its text — no need to look up the id first. "
+    "Use delete_reminder with an id only when you already have the exact id. "
+    "When the user wants to move a reminder to a different time, call reschedule_reminder with a "
+    "snippet of its text and the new time. If the move is relative to its current time (e.g. "
+    "'a day earlier', 'push it two hours'), call list_reminders first to read the current time, "
+    "then compute the new absolute time and pass that. "
     "When the user asks to delete or cancel ALL reminders, call delete_all_reminders. "
     "For shared lists: use add_to_list to add an item, remove_from_list to remove an item by "
     "its text, clear_list to wipe the whole list, show_list to display one list, and "
@@ -194,6 +209,43 @@ def _build_tools(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "id": {"type": "string", "description": "The reminder id to delete."},
                 },
                 "required": ["id"],
+            },
+        },
+        {
+            "name": _DELETE_REMINDER_BY_TEXT,
+            "description": "Cancels a reminder identified by a snippet of its text (or its id), "
+            "without needing to know the id first. Use when the user cancels by description, e.g. "
+            "'cancel the reminder about signing up for soccer'.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "A distinctive snippet of the reminder's text to match, or its id.",
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+        {
+            "name": _RESCHEDULE_REMINDER,
+            "description": "Moves an existing reminder to a new time, identified by a snippet of its "
+            "text (or its id). Use for 'move Saturday's reminder', 'push the doctor reminder to 9am', "
+            "etc. For a move relative to the current time (e.g. '24 hours earlier'), first call "
+            "list_reminders to read the current time, then compute and pass the new absolute time.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "A distinctive snippet of the reminder's text to match, or its id.",
+                    },
+                    "send_at": {
+                        "type": "string",
+                        "description": "The new ISO 8601 datetime, e.g. 2026-08-01T09:00:00 (Israel time).",
+                    },
+                },
+                "required": ["text", "send_at"],
             },
         },
         {
