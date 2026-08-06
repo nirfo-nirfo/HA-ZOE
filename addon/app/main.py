@@ -1,7 +1,5 @@
 import asyncio
-import json
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 _IL_TZ = ZoneInfo("Asia/Jerusalem")
@@ -29,6 +27,8 @@ from app.reminders import (
     find_duplicate,
     find_matching,
     list_reminders,
+    next_annual_occurrence,
+    normalize_recurring,
     pop_due,
     reschedule,
 )
@@ -44,6 +44,9 @@ _MAX_AGENT_ITERS = 6
 
 @app.on_event("startup")
 async def startup() -> None:
+    fixed = normalize_recurring()
+    if fixed:
+        logger.info("Self-healed %d yearly reminder(s) to their correct next occurrence", fixed)
     asyncio.create_task(_reminder_loop())
 
 
@@ -63,39 +66,6 @@ async def _reminder_loop() -> None:
                 await send_message(reminder.sender, f"⏰ {reminder.text}")
             except Exception:
                 logger.exception("Reminder loop: failed to send reminder %s", reminder.id)
-
-
-@app.get("/debug/reminders")
-async def debug_reminders(request: Request) -> Response:
-    """Raw reminders.json with human-readable local times, for diagnosing scheduling
-    bugs that a paraphrased chat listing can hide. Token-guarded: the Cloudflare
-    tunnel makes every path on this port publicly reachable."""
-    if request.query_params.get("token") != settings.whatsapp_verify_token:
-        return Response(status_code=403)
-
-    path = Path(settings.reminders_path)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-    except Exception as exc:
-        return Response(content=f"could not read {path}: {exc}", status_code=500)
-
-    for r in data:
-        try:
-            r["send_at_israel"] = datetime.fromtimestamp(r["send_at"], tz=_IL_TZ).strftime(
-                "%d/%m/%Y %H:%M:%S"
-            )
-        except Exception:
-            r["send_at_israel"] = "unparseable"
-
-    body = {
-        "now_israel": datetime.now(_IL_TZ).strftime("%d/%m/%Y %H:%M:%S"),
-        "count": len(data),
-        "reminders": data,
-    }
-    return Response(
-        content=json.dumps(body, ensure_ascii=False, indent=2),
-        media_type="application/json; charset=utf-8",
-    )
 
 
 @app.get("/webhook")
@@ -187,17 +157,20 @@ def _handle_reminder_call(sender: str, tool: str, inp: dict) -> str:
             send_at = dt.timestamp()
         except (ValueError, KeyError):
             return "I couldn't parse that date/time — please try again."
+        recurrence = inp.get("recurrence")
+        if recurrence not in RECURRENCES:
+            recurrence = None
+        # For a yearly reminder the first fire is, by definition, the next time that
+        # month/day/time comes around — derive it in code so a wrong year from the
+        # model (e.g. tomorrow's birthday landing on next year) can't slip through.
+        if recurrence == "yearly":
+            send_at = next_annual_occurrence(send_at)
         if send_at <= datetime.now(tz=_IL_TZ).timestamp():
-            # Would fire on the next scheduler tick instead of at the intended time —
-            # usually means the year was guessed wrong on a date given without one.
             when = dt.astimezone(_IL_TZ).strftime("%d/%m/%Y %H:%M")
             return (
                 f"That time ({when}) is in the past, so I didn't set the reminder. "
                 "Please tell me the date again, including the year."
             )
-        recurrence = inp.get("recurrence")
-        if recurrence not in RECURRENCES:
-            recurrence = None
         existing = find_duplicate(sender, inp["text"], send_at, recurrence)
         if existing:
             when = datetime.fromtimestamp(existing.send_at, tz=_IL_TZ).strftime("%d/%m/%Y %H:%M")

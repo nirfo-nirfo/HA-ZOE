@@ -56,6 +56,41 @@ def _next_occurrence(send_at: float, recurrence: str, now: float) -> float:
             return ts
 
 
+def next_annual_occurrence(send_at: float, now: float | None = None) -> float:
+    """Returns the earliest yearly occurrence (same month/day/time as `send_at`)
+    that is strictly after `now`. Used to fix a wrong year on a yearly reminder:
+    the model picks the year and can slip (e.g. tomorrow's birthday stored as next
+    year), so the code derives the correct next occurrence from month/day/time."""
+    now = time.time() if now is None else now
+    target = datetime.fromtimestamp(send_at, _IL_TZ).replace(tzinfo=None)
+    now_year = datetime.fromtimestamp(now, _IL_TZ).year
+    ts = send_at
+    for year in (now_year, now_year + 1, now_year + 2):
+        day = min(target.day, calendar.monthrange(year, target.month)[1])
+        ts = target.replace(year=year, day=day, tzinfo=_IL_TZ).timestamp()
+        if ts > now:
+            return ts
+    return ts
+
+
+def normalize_recurring() -> int:
+    """One-time self-heal for yearly reminders stored further out than their true
+    next occurrence (the wrong-year-at-creation bug). Only ever pulls a reminder
+    EARLIER, never delays one. Returns how many were corrected."""
+    now = time.time()
+    reminders = _load()
+    changed = 0
+    for i, r in enumerate(reminders):
+        if r.recurrence == "yearly":
+            corrected = next_annual_occurrence(r.send_at, now)
+            if corrected < r.send_at:
+                reminders[i] = replace(r, send_at=corrected)
+                changed += 1
+    if changed:
+        _save(reminders)
+    return changed
+
+
 def _load() -> list[Reminder]:
     path = Path(settings.reminders_path)
     if not path.exists():
