@@ -48,9 +48,19 @@ async def startup() -> None:
 async def _reminder_loop() -> None:
     while True:
         await asyncio.sleep(60)
-        for reminder in pop_due():
-            logger.info("Firing reminder %s for %s", reminder.id, reminder.sender)
-            await send_message(reminder.sender, f"⏰ {reminder.text}")
+        # Guard the whole tick: a bad reminder or a failed send must never kill the
+        # loop, or reminders would silently stop firing forever while the app stays up.
+        try:
+            due = pop_due()
+        except Exception:
+            logger.exception("Reminder loop: pop_due failed")
+            continue
+        for reminder in due:
+            try:
+                logger.info("Firing reminder %s for %s", reminder.id, reminder.sender)
+                await send_message(reminder.sender, f"⏰ {reminder.text}")
+            except Exception:
+                logger.exception("Reminder loop: failed to send reminder %s", reminder.id)
 
 
 @app.get("/webhook")
