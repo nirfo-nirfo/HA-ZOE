@@ -1,5 +1,7 @@
 import asyncio
+import json
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 _IL_TZ = ZoneInfo("Asia/Jerusalem")
@@ -61,6 +63,39 @@ async def _reminder_loop() -> None:
                 await send_message(reminder.sender, f"⏰ {reminder.text}")
             except Exception:
                 logger.exception("Reminder loop: failed to send reminder %s", reminder.id)
+
+
+@app.get("/debug/reminders")
+async def debug_reminders(request: Request) -> Response:
+    """Raw reminders.json with human-readable local times, for diagnosing scheduling
+    bugs that a paraphrased chat listing can hide. Token-guarded: the Cloudflare
+    tunnel makes every path on this port publicly reachable."""
+    if request.query_params.get("token") != settings.whatsapp_verify_token:
+        return Response(status_code=403)
+
+    path = Path(settings.reminders_path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    except Exception as exc:
+        return Response(content=f"could not read {path}: {exc}", status_code=500)
+
+    for r in data:
+        try:
+            r["send_at_israel"] = datetime.fromtimestamp(r["send_at"], tz=_IL_TZ).strftime(
+                "%d/%m/%Y %H:%M:%S"
+            )
+        except Exception:
+            r["send_at_israel"] = "unparseable"
+
+    body = {
+        "now_israel": datetime.now(_IL_TZ).strftime("%d/%m/%Y %H:%M:%S"),
+        "count": len(data),
+        "reminders": data,
+    }
+    return Response(
+        content=json.dumps(body, ensure_ascii=False, indent=2),
+        media_type="application/json; charset=utf-8",
+    )
 
 
 @app.get("/webhook")
